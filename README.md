@@ -7,7 +7,7 @@ A lightweight e-commerce application built with Node.js, Express, MongoDB, and D
 - **Auth Service** (Port 5001): Handles user registration and login using JWT.
 - **Product Service** (Port 5002): Manages products and orders.
 - **Frontend Service** (Port 3000): Serves the web UI (HTML/Bootstrap).
-- **MongoDB** (Port 27017): Database for all services.
+- **MongoDB** (internal container network): Database for all services.
 
 ## Prerequisites
 
@@ -46,4 +46,16 @@ Default ports:
 - Frontend: 3000
 - Auth: 5001
 - Product: 5002
-- MongoDB: 27017
+
+## Troubleshooting
+
+If you see an error like `failed to bind host port ... 27017 ... address already in use`, it means another local process (commonly a local MongoDB install) is already using port `27017`.
+
+This project does not publish MongoDB to a host port by default, so it can run even when local MongoDB is already running.
+
+If you explicitly need host access to the containerized MongoDB (for example, from MongoDB Compass), temporarily add this under the `mongodb` service in `docker-compose.yml`:
+
+```yaml
+ports:
+  - "27017:27017"
+```
