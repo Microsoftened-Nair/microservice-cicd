@@ -1,0 +1,51 @@
+name: Trivy Vulnerability Scan
+
+on:
+  push:
+    branches: [main, feature/**]
+  pull_request:
+    branches: [main]
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build auth-service image
+        run: docker build -t auth-service:${{ github.sha }} ./auth-service
+      
+      - name: Build Frontend-service image
+        run: docker build -t frontend-service:${{ github.sha }} ./frontend-service
+
+      - name: Build Backend-service image
+        run: docker build -t backend-service:${{ github.sha }} ./product-service
+      
+      - name: scan auth-service
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: auth-service:${{github.sha}}
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+      
+      - name: scan frontend-service
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: frontend-service:${{github.sha}}
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+
+      - name: scan backend-service
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: backend-service:${{github.sha}}
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+
+
+
+  
