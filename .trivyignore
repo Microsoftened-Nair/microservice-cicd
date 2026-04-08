@@ -1,0 +1,2 @@
+# picomatch ReDoS - affects bundled npm in node base image, not app code
+CVE-2026-33671
