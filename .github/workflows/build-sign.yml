@@ -1,0 +1,51 @@
+name: Build, Push and sign Docker Images
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-push-sign:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Install cosign
+        uses: sigstore/cosign-installer@main
+
+      - name: Build and push auth-service
+        run: |
+          docker build -t ghcr.io/microsoftened-nair/microservice-cicd/auth-service:${{ github.sha }} ./auth-service
+          docker push ghcr.io/microsoftened-nair/microservice-cicd/auth-service:${{ github.sha }}
+
+      - name: Build and push frontend-service
+        run: |
+          docker build -t ghcr.io/microsoftened-nair/microservice-cicd/frontend-service:${{ github.sha }} ./frontend-service
+          docker push ghcr.io/microsoftened-nair/microservice-cicd/frontend-service:${{ github.sha }}
+
+      - name: Build and push product-service
+        run: |
+          docker build -t ghcr.io/microsoftened-nair/microservice-cicd/product-service:${{ github.sha }} ./product-service
+          docker push ghcr.io/microsoftened-nair/microservice-cicd/product-service:${{ github.sha }}
+
+      - name: Sign images
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
+          cosign sign --key cosign.key ghcr.io/microsoftened-nair/microservice-cicd/auth-service:${{ github.sha }}
+          cosign sign --key cosign.key ghcr.io/microsoftened-nair/microservice-cicd/frontend-service:${{ github.sha }}
+          cosign sign --key cosign.key ghcr.io/microsoftened-nair/microservice-cicd/product-service:${{ github.sha }}
+          rm cosign.key
