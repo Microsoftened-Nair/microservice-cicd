@@ -11,7 +11,7 @@ services:
 
   auth-service:
     build: ./auth-service
-    container_name: auth-service
+    container_name: nairmeghraj/auth-service:latest
     ports:
       - "${AUTH_PORT}:${AUTH_PORT}"
     environment:
@@ -24,7 +24,7 @@ services:
 
   product-service:
     build: ./product-service
-    container_name: product-service
+    container_name: nairmeghraj/product-service:latest
     ports:
       - "${PRODUCT_PORT}:${PRODUCT_PORT}"
     environment:
@@ -37,7 +37,7 @@ services:
 
   frontend-service:
     build: ./frontend-service
-    container_name: frontend-service
+    container_name: nairmeghraj/frontend-service:latest
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     environment:

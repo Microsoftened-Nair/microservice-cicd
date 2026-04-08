@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  node-syntax-check:
+    name: Node Syntax Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - product-service
+          - frontend-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate server syntax
+        run: node --check server.js
+        working-directory: ${{ matrix.service }}
+
+  compose-validate:
+    name: Docker Compose Validate
+    runs-on: ubuntu-latest
+    env:
+      AUTH_PORT: 5001
+      PRODUCT_PORT: 5002
+      FRONTEND_PORT: 3000
+      MONGO_URL: mongodb://mongodb:27017/ecommerce
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose config >/dev/null
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - product-service
+          - frontend-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t local/${{ matrix.service }}:${{ github.sha }} ./${{ matrix.service }}

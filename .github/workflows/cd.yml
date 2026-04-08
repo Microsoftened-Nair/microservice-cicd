@@ -1,0 +1,82 @@
+name: CD
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish-images:
+    name: Publish Docker Images to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: auth-service
+          - service: product-service
+          - service: frontend-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set lowercase owner
+        id: vars
+        run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:latest
+            ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+
+  deploy-frontend-pages:
+    name: Deploy Frontend to GitHub Pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate runtime frontend config
+        run: |
+          cat > frontend-service/public/js/config.js <<'EOF'
+          window.APP_CONFIG = {
+            AUTH_API: '${{ vars.AUTH_API_URL || 'http://localhost:5001' }}',
+            PRODUCT_API: '${{ vars.PRODUCT_API_URL || 'http://localhost:5002' }}'
+          };
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend-service/public
+
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

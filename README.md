@@ -39,6 +39,38 @@ A lightweight e-commerce application built with Node.js, Express, MongoDB, and D
 - **Product Service**: `product-service/`
 - **Frontend Service**: `frontend-service/`
 
+## CI/CD (GitHub Actions)
+
+This repository includes two workflows:
+
+- **CI**: `.github/workflows/ci.yml`
+  - Runs on push and pull requests.
+  - Checks Node syntax for each service (`node --check server.js`).
+  - Validates `docker-compose.yml`.
+  - Builds Docker images for all services.
+
+- **CD**: `.github/workflows/cd.yml`
+  - Runs on pushes to `main` (and manual dispatch).
+  - Publishes Docker images to GitHub Container Registry (GHCR).
+  - Deploys static frontend files from `frontend-service/public` to GitHub Pages.
+
+### Required GitHub Repository Settings
+
+1. In **Settings > Actions > General**:
+  - Ensure workflows are allowed to run.
+
+2. In **Settings > Pages**:
+  - Set source to **GitHub Actions**.
+
+3. In **Settings > Variables and secrets > Actions > Variables**:
+  - Add `AUTH_API_URL` (example: `https://your-auth-api.example.com`)
+  - Add `PRODUCT_API_URL` (example: `https://your-product-api.example.com`)
+
+Notes:
+
+- GHCR publishing uses the built-in `GITHUB_TOKEN`; no extra secret is required for that.
+- GitHub Pages can host only the frontend static files. Deploy backend services separately (for example Render, Railway, Fly.io, or a VPS with Docker).
+
 ## Environment Variables
 
 Configuration is handled in `.env` and `docker-compose.yml`.

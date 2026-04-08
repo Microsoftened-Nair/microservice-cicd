@@ -1,5 +1,5 @@
-const AUTH_API = 'http://localhost:5001';
-const PRODUCT_API = 'http://localhost:5002';
+const AUTH_API = window.APP_CONFIG?.AUTH_API || 'http://localhost:5001';
+const PRODUCT_API = window.APP_CONFIG?.PRODUCT_API || 'http://localhost:5002';
 
 document.addEventListener('DOMContentLoaded', () => {
     updateNav();
