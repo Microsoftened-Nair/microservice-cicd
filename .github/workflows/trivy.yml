@@ -22,7 +22,7 @@ jobs:
         run: docker build -t backend-service:${{ github.sha }} ./product-service
       
       - name: scan auth-service
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: auth-service:${{github.sha}}
           format: 'table'
@@ -30,7 +30,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
       
       - name: scan frontend-service
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: frontend-service:${{github.sha}}
           format: 'table'
@@ -38,7 +38,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
 
       - name: scan backend-service
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: backend-service:${{github.sha}}
           format: 'table'
