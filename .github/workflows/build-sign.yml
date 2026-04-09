@@ -1,19 +1,31 @@
-name: Build, Push and sign Docker Images
+name: Secure Build, Push and Sign Docker Images
 on:
+  workflow_dispatch:
   push:
     branches: [main]
 
 jobs:
-  build-push-sign:
+  secure-release:
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
       packages: write
 
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - product-service
+          - frontend-service
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set lowercase owner
+        id: vars
+        run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: log in to GHCR
         uses: docker/login-action@v3
@@ -23,29 +35,51 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Install cosign
-        uses: sigstore/cosign-installer@main
+        uses: sigstore/cosign-installer@v3.8.1
 
-      - name: Build and push auth-service
+      - name: Build local image
+        env:
+          IMAGE_SHA: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+          IMAGE_LATEST: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:latest
         run: |
-          docker build -t ghcr.io/microsoftened-nair/microservice-cicd/auth-service:${{ github.sha }} ./auth-service
-          docker push ghcr.io/microsoftened-nair/microservice-cicd/auth-service:${{ github.sha }}
+          docker build -t "$IMAGE_SHA" -t "$IMAGE_LATEST" ./${{ matrix.service }}
 
-      - name: Build and push frontend-service
-        run: |
-          docker build -t ghcr.io/microsoftened-nair/microservice-cicd/frontend-service:${{ github.sha }} ./frontend-service
-          docker push ghcr.io/microsoftened-nair/microservice-cicd/frontend-service:${{ github.sha }}
+      - name: Trivy scan (HIGH,CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
 
-      - name: Build and push product-service
+      - name: Push images
+        env:
+          IMAGE_SHA: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+          IMAGE_LATEST: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:latest
         run: |
-          docker build -t ghcr.io/microsoftened-nair/microservice-cicd/product-service:${{ github.sha }} ./product-service
-          docker push ghcr.io/microsoftened-nair/microservice-cicd/product-service:${{ github.sha }}
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
 
       - name: Sign images
         env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          IMAGE_SHA: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+          IMAGE_LATEST: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:latest
         run: |
-          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
-          cosign sign --key cosign.key ghcr.io/microsoftened-nair/microservice-cicd/auth-service:${{ github.sha }}
-          cosign sign --key cosign.key ghcr.io/microsoftened-nair/microservice-cicd/frontend-service:${{ github.sha }}
-          cosign sign --key cosign.key ghcr.io/microsoftened-nair/microservice-cicd/product-service:${{ github.sha }}
-          rm cosign.key
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$IMAGE_SHA"
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$IMAGE_LATEST"
+
+      - name: Verify signatures (optional)
+        env:
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+          IMAGE_SHA: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+          IMAGE_LATEST: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:latest
+        run: |
+          if [ -z "$COSIGN_PUBLIC_KEY" ]; then
+            echo "COSIGN_PUBLIC_KEY is not configured; skipping signature verification."
+            exit 0
+          fi
+          cosign verify --key env://COSIGN_PUBLIC_KEY "$IMAGE_SHA"
+          cosign verify --key env://COSIGN_PUBLIC_KEY "$IMAGE_LATEST"

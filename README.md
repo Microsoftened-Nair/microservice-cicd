@@ -41,7 +41,7 @@ A lightweight e-commerce application built with Node.js, Express, MongoDB, and D
 
 ## CI/CD (GitHub Actions)
 
-This repository includes two workflows:
+This repository includes four workflows:
 
 - **CI**: `.github/workflows/ci.yml`
   - Runs on push and pull requests.
@@ -49,10 +49,21 @@ This repository includes two workflows:
   - Validates `docker-compose.yml`.
   - Builds Docker images for all services.
 
+- **Secure Image Release**: `.github/workflows/build-sign.yml`
+  - Runs on pushes to `main` (and manual dispatch).
+  - Builds each service image locally.
+  - Runs Trivy scan (`HIGH,CRITICAL`) before publishing.
+  - Pushes images to GHCR only after scan passes.
+  - Signs pushed images with Cosign.
+  - Optionally verifies signatures when `COSIGN_PUBLIC_KEY` is configured.
+
 - **CD**: `.github/workflows/cd.yml`
   - Runs on pushes to `main` (and manual dispatch).
-  - Publishes Docker images to GitHub Container Registry (GHCR).
   - Deploys static frontend files from `frontend-service/public` to GitHub Pages.
+
+- **Trivy PR Scan**: `.github/workflows/trivy.yml`
+  - Runs on pull requests to `main` (and manual dispatch).
+  - Builds service images and scans them for `HIGH,CRITICAL` vulnerabilities.
 
 ### Required GitHub Repository Settings
 
@@ -66,9 +77,15 @@ This repository includes two workflows:
   - Add `AUTH_API_URL` (example: `https://your-auth-api.example.com`)
   - Add `PRODUCT_API_URL` (example: `https://your-product-api.example.com`)
 
+4. In **Settings > Variables and secrets > Actions > Secrets**:
+  - Add `COSIGN_PRIVATE_KEY` (private signing key contents)
+  - Add `COSIGN_PASSWORD` (password used for the private key)
+  - Optional: `COSIGN_PUBLIC_KEY` (enables in-pipeline signature verification)
+
 Notes:
 
-- GHCR publishing uses the built-in `GITHUB_TOKEN`; no extra secret is required for that.
+- GHCR publishing uses the built-in `GITHUB_TOKEN`; no extra token secret is required for publishing.
+- Image publishing is now centralized in `.github/workflows/build-sign.yml` so images are scanned and signed in one release path.
 - GitHub Pages can host only the frontend static files. Deploy backend services separately (for example Render, Railway, Fly.io, or a VPS with Docker).
 
 ## Environment Variables
