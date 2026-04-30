@@ -1,0 +1,52 @@
+name: Deploy to Render
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: Trigger Render Deploys
+    runs-on: ubuntu-latest
+    env:
+      RENDER_AUTH_SERVICE_ID: ${{ vars.RENDER_AUTH_SERVICE_ID }}
+      RENDER_PRODUCT_SERVICE_ID: ${{ vars.RENDER_PRODUCT_SERVICE_ID }}
+      RENDER_FRONTEND_SERVICE_ID: ${{ vars.RENDER_FRONTEND_SERVICE_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify API key
+        run: |
+          if [ -z "${{ secrets.RENDER_API_KEY }}" ]; then
+            echo "ERROR: secrets.RENDER_API_KEY is not set" >&2
+            exit 1
+          fi
+
+      - name: Deploy Auth Service to Render
+        if: ${{ env.RENDER_AUTH_SERVICE_ID != '' }}
+        run: |
+          echo "Triggering deploy for auth service: $RENDER_AUTH_SERVICE_ID"
+          curl -s -X POST "https://api.render.com/v1/services/$RENDER_AUTH_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":false}'
+
+      - name: Deploy Product Service to Render
+        if: ${{ env.RENDER_PRODUCT_SERVICE_ID != '' }}
+        run: |
+          echo "Triggering deploy for product service: $RENDER_PRODUCT_SERVICE_ID"
+          curl -s -X POST "https://api.render.com/v1/services/$RENDER_PRODUCT_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":false}'
+
+      - name: Deploy Frontend Service to Render
+        if: ${{ env.RENDER_FRONTEND_SERVICE_ID != '' }}
+        run: |
+          echo "Triggering deploy for frontend service: $RENDER_FRONTEND_SERVICE_ID"
+          curl -s -X POST "https://api.render.com/v1/services/$RENDER_FRONTEND_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":false}'

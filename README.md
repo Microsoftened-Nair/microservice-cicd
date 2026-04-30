@@ -61,6 +61,37 @@ This repository includes four workflows:
   - Runs on pushes to `main` (and manual dispatch).
   - Deploys static frontend files from `frontend-service/public` to GitHub Pages.
 
+### Render deployment (optional)
+
+This repository includes an optional workflow that can trigger deploys of backend (and frontend) services on Render using the Render API: `.github/workflows/deploy-render.yml`.
+
+Setup steps:
+
+1. Create Web Services on Render for the `auth-service` and `product-service` (and optionally the `frontend-service`). You can connect the repo directly in Render or create services that deploy from a branch or an image.
+
+2. In your GitHub repository settings add the following **Actions secrets**:
+  - `RENDER_API_KEY` — a Render API key with permission to trigger deploys.
+
+3. Add the Render service IDs as repository **Actions variables** (or secrets):
+  - `RENDER_AUTH_SERVICE_ID`
+  - `RENDER_PRODUCT_SERVICE_ID`
+  - `RENDER_FRONTEND_SERVICE_ID` (optional)
+
+4. Trigger the workflow manually from Actions or push to `main`. The workflow will POST to Render's deploy endpoint for each service ID you configure.
+
+Manual API example (local test):
+
+```bash
+curl -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{}' 
+```
+
+Notes:
+- The workflow requires `RENDER_API_KEY` to be set or it will fail early.
+- Render's free plan supports web services and static sites; review Render quotas/limits before enabling automated deploys.
+
 - **Trivy PR Scan**: `.github/workflows/trivy.yml`
   - Runs on pull requests to `main` (and manual dispatch).
   - Builds service images and scans them for `HIGH,CRITICAL` vulnerabilities.
@@ -108,3 +139,10 @@ If you explicitly need host access to the containerized MongoDB (for example, fr
 ports:
   - "27017:27017"
 ```
+
+If the UI appears unstyled (for example, plain bullets, default inputs, and no dark navbar), your network may be blocking the Bootstrap CDN (`cdn.jsdelivr.net`).
+
+The frontend now includes a local fallback stylesheet in `frontend-service/public/css/style.css` that keeps the pages usable even when CDN assets are unavailable. If styling still looks plain, open browser DevTools and verify these requests return `200`:
+
+- `/css/style.css`
+- `https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css`
