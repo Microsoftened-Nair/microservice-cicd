@@ -147,34 +147,28 @@ jobs:
           fi
 
       - name: Deploy Auth Service
-        env:
-          IMAGE_URL: ghcr.io/${{ steps.vars.outputs.owner_lc }}/auth-service:${{ github.sha }}
         run: |
-          echo "Deploying auth service from $IMAGE_URL"
+          echo "Deploying auth service from its connected repository"
           curl -s -X POST "https://api.render.com/v1/services/$RENDER_AUTH_SERVICE_ID/deploys" \
             -H "accept: application/json" \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
-            --data-raw "{\"imageUrl\":\"$IMAGE_URL\"}"
+            --data-raw '{"deployMode":"build_and_deploy"}'
 
       - name: Deploy Product Service
-        env:
-          IMAGE_URL: ghcr.io/${{ steps.vars.outputs.owner_lc }}/product-service:${{ github.sha }}
         run: |
-          echo "Deploying product service from $IMAGE_URL"
+          echo "Deploying product service from its connected repository"
           curl -s -X POST "https://api.render.com/v1/services/$RENDER_PRODUCT_SERVICE_ID/deploys" \
             -H "accept: application/json" \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
-            --data-raw "{\"imageUrl\":\"$IMAGE_URL\"}"
+            --data-raw '{"deployMode":"build_and_deploy"}'
 
       - name: Deploy Frontend Service
-        env:
-          IMAGE_URL: ghcr.io/${{ steps.vars.outputs.owner_lc }}/frontend-service:${{ github.sha }}
         run: |
-          echo "Deploying frontend service from $IMAGE_URL"
+          echo "Deploying frontend service from its connected repository"
           curl -s -X POST "https://api.render.com/v1/services/$RENDER_FRONTEND_SERVICE_ID/deploys" \
             -H "accept: application/json" \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
-            --data-raw "{\"imageUrl\":\"$IMAGE_URL\"}"
+            --data-raw '{"deployMode":"build_and_deploy"}'

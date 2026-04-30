@@ -48,7 +48,7 @@ This repository now uses one workflow:
   - Checks Node syntax for each service and validates `docker-compose.yml`.
   - Builds each Docker image, scans it with Trivy, pushes it to GHCR, and signs it with Cosign.
   - Generates the frontend runtime config from GitHub Actions variables before building the frontend image.
-  - Triggers Render deploys for `auth-service`, `product-service`, and `frontend-service` in that order after the images are published.
+  - Triggers normal repository-based Render deploys for `auth-service`, `product-service`, and `frontend-service` in that order after the images are published.
 
 ### Required GitHub Repository Settings
 
@@ -70,8 +70,8 @@ This repository now uses one workflow:
 Notes:
 
 - GHCR publishing uses the built-in `GITHUB_TOKEN`; no extra token secret is required for publishing.
-- Render services should be configured as image-backed services that pull from the GHCR image names pushed by the workflow.
-- If your GHCR packages are private, make sure Render has registry access configured for GHCR.
+- Render services should be connected to the repository source so they deploy from the service folders normally.
+- The GHCR images are published for release tracking and registry use, but Render does not pull those images in this setup.
 
 ## Environment Variables
 
