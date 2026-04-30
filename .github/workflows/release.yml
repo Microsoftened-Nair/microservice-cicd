@@ -1,0 +1,180 @@
+name: Release Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Syntax and Compose Checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - product-service
+          - frontend-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate server syntax
+        run: node --check server.js
+        working-directory: ${{ matrix.service }}
+
+      - name: Validate docker-compose.yml
+        if: ${{ matrix.service == 'auth-service' }}
+        env:
+          AUTH_PORT: 5001
+          PRODUCT_PORT: 5002
+          FRONTEND_PORT: 3000
+          MONGO_URL: mongodb://mongodb:27017/ecommerce
+        run: docker compose config >/dev/null
+
+  build-sign-push:
+    name: Build, Scan, Sign, and Push
+    runs-on: ubuntu-latest
+    needs: ci
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - product-service
+          - frontend-service
+    env:
+      AUTH_API_URL: ${{ vars.AUTH_API_URL }}
+      PRODUCT_API_URL: ${{ vars.PRODUCT_API_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set lowercase owner
+        id: vars
+        run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare frontend config
+        if: ${{ matrix.service == 'frontend-service' }}
+        run: |
+          if [ -z "$AUTH_API_URL" ] || [ -z "$PRODUCT_API_URL" ]; then
+            echo "ERROR: AUTH_API_URL and PRODUCT_API_URL must be set in GitHub Actions variables." >&2
+            exit 1
+          fi
+
+          cat > frontend-service/public/js/config.js <<EOF
+          window.APP_CONFIG = {
+            AUTH_API: '${AUTH_API_URL}',
+            PRODUCT_API: '${PRODUCT_API_URL}'
+          };
+          EOF
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.1
+
+      - name: Build local image
+        env:
+          IMAGE_SHA: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+          IMAGE_LATEST: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:latest
+        run: |
+          docker build -t "$IMAGE_SHA" -t "$IMAGE_LATEST" ./${{ matrix.service }}
+
+      - name: Trivy scan (HIGH,CRITICAL)
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Push images to GHCR
+        env:
+          IMAGE_SHA: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+          IMAGE_LATEST: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:latest
+        run: |
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+
+      - name: Sign images
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          IMAGE_SHA: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:${{ github.sha }}
+          IMAGE_LATEST: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.service }}:latest
+        run: |
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$IMAGE_SHA"
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$IMAGE_LATEST"
+
+  deploy-render:
+    name: Deploy All Services to Render
+    runs-on: ubuntu-latest
+    needs: build-sign-push
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_AUTH_SERVICE_ID: ${{ vars.RENDER_AUTH_SERVICE_ID }}
+      RENDER_PRODUCT_SERVICE_ID: ${{ vars.RENDER_PRODUCT_SERVICE_ID }}
+      RENDER_FRONTEND_SERVICE_ID: ${{ vars.RENDER_FRONTEND_SERVICE_ID }}
+    steps:
+      - name: Set lowercase owner
+        id: vars
+        run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Render configuration
+        run: |
+          if [ -z "$RENDER_API_KEY" ]; then
+            echo "ERROR: RENDER_API_KEY is not set." >&2
+            exit 1
+          fi
+
+          if [ -z "$RENDER_AUTH_SERVICE_ID" ] || [ -z "$RENDER_PRODUCT_SERVICE_ID" ] || [ -z "$RENDER_FRONTEND_SERVICE_ID" ]; then
+            echo "ERROR: RENDER_*_SERVICE_ID variables must be set for all services." >&2
+            exit 1
+          fi
+
+      - name: Deploy Auth Service
+        env:
+          IMAGE_URL: ghcr.io/${{ steps.vars.outputs.owner_lc }}/auth-service:${{ github.sha }}
+        run: |
+          echo "Deploying auth service from $IMAGE_URL"
+          curl -s -X POST "https://api.render.com/v1/services/$RENDER_AUTH_SERVICE_ID/deploys" \
+            -H "accept: application/json" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-raw "{\"imageUrl\":\"$IMAGE_URL\"}"
+
+      - name: Deploy Product Service
+        env:
+          IMAGE_URL: ghcr.io/${{ steps.vars.outputs.owner_lc }}/product-service:${{ github.sha }}
+        run: |
+          echo "Deploying product service from $IMAGE_URL"
+          curl -s -X POST "https://api.render.com/v1/services/$RENDER_PRODUCT_SERVICE_ID/deploys" \
+            -H "accept: application/json" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-raw "{\"imageUrl\":\"$IMAGE_URL\"}"
+
+      - name: Deploy Frontend Service
+        env:
+          IMAGE_URL: ghcr.io/${{ steps.vars.outputs.owner_lc }}/frontend-service:${{ github.sha }}
+        run: |
+          echo "Deploying frontend service from $IMAGE_URL"
+          curl -s -X POST "https://api.render.com/v1/services/$RENDER_FRONTEND_SERVICE_ID/deploys" \
+            -H "accept: application/json" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-raw "{\"imageUrl\":\"$IMAGE_URL\"}"

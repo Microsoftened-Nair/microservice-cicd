@@ -41,83 +41,37 @@ A lightweight e-commerce application built with Node.js, Express, MongoDB, and D
 
 ## CI/CD (GitHub Actions)
 
-This repository includes four workflows:
+This repository now uses one workflow:
 
-- **CI**: `.github/workflows/ci.yml`
-  - Runs on push and pull requests.
-  - Checks Node syntax for each service (`node --check server.js`).
-  - Validates `docker-compose.yml`.
-  - Builds Docker images for all services.
-
-- **Secure Image Release**: `.github/workflows/build-sign.yml`
-  - Runs on pushes to `main` (and manual dispatch).
-  - Builds each service image locally.
-  - Runs Trivy scan (`HIGH,CRITICAL`) before publishing.
-  - Pushes images to GHCR only after scan passes.
-  - Signs pushed images with Cosign.
-  - Optionally verifies signatures when `COSIGN_PUBLIC_KEY` is configured.
-
-- **CD**: `.github/workflows/cd.yml`
-  - Runs on pushes to `main` (and manual dispatch).
-  - Deploys static frontend files from `frontend-service/public` to GitHub Pages.
-
-### Render deployment (optional)
-
-This repository includes an optional workflow that can trigger deploys of backend (and frontend) services on Render using the Render API: `.github/workflows/deploy-render.yml`.
-
-Setup steps:
-
-1. Create Web Services on Render for the `auth-service` and `product-service` (and optionally the `frontend-service`). You can connect the repo directly in Render or create services that deploy from a branch or an image.
-
-2. In your GitHub repository settings add the following **Actions secrets**:
-  - `RENDER_API_KEY` — a Render API key with permission to trigger deploys.
-
-3. Add the Render service IDs as repository **Actions variables** (or secrets):
-  - `RENDER_AUTH_SERVICE_ID`
-  - `RENDER_PRODUCT_SERVICE_ID`
-  - `RENDER_FRONTEND_SERVICE_ID` (optional)
-
-4. Trigger the workflow manually from Actions or push to `main`. The workflow will POST to Render's deploy endpoint for each service ID you configure.
-
-Manual API example (local test):
-
-```bash
-curl -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
-  -H "Authorization: Bearer $RENDER_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{}' 
-```
-
-Notes:
-- The workflow requires `RENDER_API_KEY` to be set or it will fail early.
-- Render's free plan supports web services and static sites; review Render quotas/limits before enabling automated deploys.
-
-- **Trivy PR Scan**: `.github/workflows/trivy.yml`
-  - Runs on pull requests to `main` (and manual dispatch).
-  - Builds service images and scans them for `HIGH,CRITICAL` vulnerabilities.
+**Release Pipeline**: `.github/workflows/release.yml`
+  - Runs on pushes to `main` and manual dispatch.
+  - Checks Node syntax for each service and validates `docker-compose.yml`.
+  - Builds each Docker image, scans it with Trivy, pushes it to GHCR, and signs it with Cosign.
+  - Generates the frontend runtime config from GitHub Actions variables before building the frontend image.
+  - Triggers Render deploys for `auth-service`, `product-service`, and `frontend-service` in that order after the images are published.
 
 ### Required GitHub Repository Settings
 
 1. In **Settings > Actions > General**:
   - Ensure workflows are allowed to run.
 
-2. In **Settings > Pages**:
-  - Set source to **GitHub Actions**.
+2. In **Settings > Variables and secrets > Actions > Variables**:
+  - Add `AUTH_API_URL` (for example, your deployed auth service URL)
+  - Add `PRODUCT_API_URL` (for example, your deployed product service URL)
+  - Add `RENDER_AUTH_SERVICE_ID`
+  - Add `RENDER_PRODUCT_SERVICE_ID`
+  - Add `RENDER_FRONTEND_SERVICE_ID`
 
-3. In **Settings > Variables and secrets > Actions > Variables**:
-  - Add `AUTH_API_URL` (example: `https://your-auth-api.example.com`)
-  - Add `PRODUCT_API_URL` (example: `https://your-product-api.example.com`)
-
-4. In **Settings > Variables and secrets > Actions > Secrets**:
+3. In **Settings > Variables and secrets > Actions > Secrets**:
+  - Add `RENDER_API_KEY` (Render API token)
   - Add `COSIGN_PRIVATE_KEY` (private signing key contents)
   - Add `COSIGN_PASSWORD` (password used for the private key)
-  - Optional: `COSIGN_PUBLIC_KEY` (enables in-pipeline signature verification)
 
 Notes:
 
 - GHCR publishing uses the built-in `GITHUB_TOKEN`; no extra token secret is required for publishing.
-- Image publishing is now centralized in `.github/workflows/build-sign.yml` so images are scanned and signed in one release path.
-- GitHub Pages can host only the frontend static files. Deploy backend services separately (for example Render, Railway, Fly.io, or a VPS with Docker).
+- Render services should be configured as image-backed services that pull from the GHCR image names pushed by the workflow.
+- If your GHCR packages are private, make sure Render has registry access configured for GHCR.
 
 ## Environment Variables
 
