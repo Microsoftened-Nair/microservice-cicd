@@ -3,51 +3,59 @@ version: '3.8'
 services:
   mongodb:
     image: mongo:latest
-    container_name: mongodb
     volumes:
       - mongodb_data:/data/db
     networks:
       - ecommerce-network
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
 
   auth-service:
-    build: ./auth-service
-    container_name: nairmeghraj/auth-service:latest
+    image: nairmeghraj/auth-service:latest
     ports:
-      - "${AUTH_PORT}:${AUTH_PORT}"
+      - "5001:5001"
     environment:
-      - PORT=${AUTH_PORT}
-      - MONGO_URL=${MONGO_URL}
-    depends_on:
-      - mongodb
+      - PORT=5001
+      - MONGO_URL=mongodb://mongodb:27017/ecommerce_ci_cd
     networks:
       - ecommerce-network
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
 
   product-service:
-    build: ./product-service
-    container_name: nairmeghraj/product-service:latest
+    image: nairmeghraj/product-service:latest
     ports:
-      - "${PRODUCT_PORT}:${PRODUCT_PORT}"
+      - "5002:5002"
     environment:
-      - PORT=${PRODUCT_PORT}
-      - MONGO_URL=${MONGO_URL}
-    depends_on:
-      - mongodb
+      - PORT=5002
+      - MONGO_URL=mongodb://mongodb:27017/ecommerce_ci_cd
     networks:
       - ecommerce-network
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
 
   frontend-service:
-    build: ./frontend-service
-    container_name: nairmeghraj/frontend-service:latest
+    image: nairmeghraj/frontend-service:latest
     ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+      - "3000:3000"
     environment:
-      - PORT=${FRONTEND_PORT}
+      - PORT=3000
     networks:
       - ecommerce-network
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
 
 networks:
   ecommerce-network:
-    driver: bridge
+    driver: overlay
 
 volumes:
   mongodb_data:
