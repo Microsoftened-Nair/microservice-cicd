@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mongodb:
     image: mongo:latest
@@ -11,12 +9,14 @@ services:
 
   auth-service:
     build: ./auth-service
-    container_name: nairmeghraj/auth-service:latest
+    image: nairmeghraj/auth-service:latest
+    container_name: auth-service
     ports:
       - "${AUTH_PORT}:${AUTH_PORT}"
     environment:
       - PORT=${AUTH_PORT}
       - MONGO_URL=${MONGO_URL}
+      - SERVICE_NAME=auth-service
     depends_on:
       - mongodb
     networks:
@@ -24,12 +24,14 @@ services:
 
   product-service:
     build: ./product-service
-    container_name: nairmeghraj/product-service:latest
+    image: nairmeghraj/product-service:latest
+    container_name: product-service
     ports:
       - "${PRODUCT_PORT}:${PRODUCT_PORT}"
     environment:
       - PORT=${PRODUCT_PORT}
       - MONGO_URL=${MONGO_URL}
+      - SERVICE_NAME=product-service
     depends_on:
       - mongodb
     networks:
@@ -37,11 +39,44 @@ services:
 
   frontend-service:
     build: ./frontend-service
-    container_name: nairmeghraj/frontend-service:latest
+    image: nairmeghraj/frontend-service:latest
+    container_name: frontend-service
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     environment:
       - PORT=${FRONTEND_PORT}
+      - SERVICE_NAME=frontend-service
+    networks:
+      - ecommerce-network
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    ports:
+      - "${PROMETHEUS_PORT}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - auth-service
+      - product-service
+      - frontend-service
+    networks:
+      - ecommerce-network
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: grafana
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
     networks:
       - ecommerce-network
 
@@ -51,3 +86,4 @@ networks:
 
 volumes:
   mongodb_data:
+  grafana_data:

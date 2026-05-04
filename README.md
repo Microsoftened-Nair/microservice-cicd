@@ -8,6 +8,8 @@ A lightweight e-commerce application built with Node.js, Express, MongoDB, and D
 - **Product Service** (Port 5002): Manages products and orders.
 - **Frontend Service** (Port 3000): Serves the web UI (HTML/Bootstrap).
 - **MongoDB** (internal container network): Database for all services.
+- **Prometheus** (Port 9090): Scrapes service metrics.
+- **Grafana** (Port 3001): Visualizes service metrics with a provisioned dashboard.
 
 ## Prerequisites
 
@@ -25,6 +27,12 @@ A lightweight e-commerce application built with Node.js, Express, MongoDB, and D
     docker-compose up --build
     ```
 4.  Open your browser to [http://localhost:3000](http://localhost:3000).
+5.  Open Prometheus at [http://localhost:9090](http://localhost:9090) and Grafana at [http://localhost:3001](http://localhost:3001).
+
+Default Grafana login:
+
+- Username: `admin`
+- Password: `admin`
 
 ## Usage
 
@@ -38,6 +46,51 @@ A lightweight e-commerce application built with Node.js, Express, MongoDB, and D
 - **Auth Service**: `auth-service/`
 - **Product Service**: `product-service/`
 - **Frontend Service**: `frontend-service/`
+
+## Monitoring
+
+Each Express service exposes Prometheus metrics at `/metrics`.
+
+Available local endpoints:
+
+- Auth metrics: [http://localhost:5001/metrics](http://localhost:5001/metrics)
+- Product metrics: [http://localhost:5002/metrics](http://localhost:5002/metrics)
+- Frontend metrics: [http://localhost:3000/metrics](http://localhost:3000/metrics)
+- Prometheus: [http://localhost:9090](http://localhost:9090)
+- Grafana: [http://localhost:3001](http://localhost:3001)
+
+Prometheus is configured in `monitoring/prometheus/prometheus.yml` and scrapes the Docker Compose service names:
+
+- `auth-service:5001`
+- `product-service:5002`
+- `frontend-service:3000`
+
+Grafana provisioning lives under `monitoring/grafana/provisioning`. It automatically creates the Prometheus datasource and imports the `Ecommerce Services Overview` dashboard from `monitoring/grafana/dashboards/ecommerce-overview.json`.
+
+### Render Notes
+
+The hosting team can reuse the same app metrics endpoints on Render. For a Render-hosted Prometheus service, replace the Docker Compose scrape targets with the deployed service hostnames, for example:
+
+```yaml
+scrape_configs:
+  - job_name: ecommerce-services
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - your-auth-service.onrender.com
+        labels:
+          service: auth-service
+      - targets:
+          - your-product-service.onrender.com
+        labels:
+          service: product-service
+      - targets:
+          - your-frontend-service.onrender.com
+        labels:
+          service: frontend-service
+```
+
+Keep in mind that `/metrics` is currently public. For production, prefer Render private networking, an IP allowlist, or a small auth layer in front of metrics before exposing these endpoints publicly.
 
 ## CI/CD (GitHub Actions)
 
@@ -80,6 +133,8 @@ Default ports:
 - Frontend: 3000
 - Auth: 5001
 - Product: 5002
+- Prometheus: 9090
+- Grafana: 3001
 
 ## Troubleshooting
 
